@@ -1,0 +1,13 @@
+workspace.code-workspace
+.vscode/
+.idea/
+*.log
+logger-service/loggerServiceApp
+authentication-service/authApp
+broker-service/brokerApp
+front-end/frontApp
+mailer-service/mailerApp
+*/go.mod
+*/go.sum
+.DS_Store
+mongo
