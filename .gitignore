@@ -11,3 +11,4 @@ mailer-service/mailerApp
 */go.sum
 .DS_Store
 mongo
+project/db-data/*
