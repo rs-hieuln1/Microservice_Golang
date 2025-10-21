@@ -2,12 +2,18 @@ package main
 
 import (
 	"broker/event"
+	"broker/logs"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/rpc"
+	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type RequestPayload struct {
@@ -270,4 +276,40 @@ func (app *Config) logEventViaRPC(w http.ResponseWriter, l LogPayload) {
 		app.errorJSON(w, err)
 		return
 	}
+}
+
+func (app *Config) logEventViaGRPC(w http.ResponseWriter, r *http.Request) {
+	var requestPayload RequestPayload
+
+	err := app.readJSON(w, r, &requestPayload)
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	logServiceAddress := "logger-service:50001"
+	conn, err := grpc.Dial(logServiceAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+	defer conn.Close()
+
+	client := logs.NewLogServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	_, err = client.WriteLog(ctx, &logs.LogRequest{
+		LogEntry: &logs.Log{
+			Name: requestPayload.Log.Name,
+			Data: requestPayload.Log.Data,
+		},
+	})
+
+	payload := jsonResponse{
+		Error:   false,
+		Message: "Logged via gRPC",
+	}
+
+	app.writeJSON(w, http.StatusAccepted, payload)
 }
