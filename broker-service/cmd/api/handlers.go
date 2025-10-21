@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/rpc"
 )
 
 type RequestPayload struct {
@@ -33,6 +34,11 @@ type MailPayload struct {
 	Message string `json:"message"`
 }
 
+type RPCPayload struct {
+	Name string `json:"name"`
+	Data string `json:"data"`
+}
+
 func (app *Config) Broker(w http.ResponseWriter, r *http.Request) {
 	payload := jsonResponse{
 		Error:   false,
@@ -57,7 +63,7 @@ func (app *Config) HandleSubmission(w http.ResponseWriter, r *http.Request) {
 	case "auth":
 		app.authenticate(w, requestPayload.Auth)
 	case "log":
-		app.logEventViaRabbit(w, requestPayload.Log)
+		app.logEventViaRPC(w, requestPayload.Log)
 	case "mail":
 		app.sendMail(w, requestPayload.Mail)
 	default:
@@ -232,4 +238,36 @@ func (app *Config) pushToQueue(name, msg string) error {
 		return err
 	}
 	return nil
+}
+
+func (app *Config) logEventViaRPC(w http.ResponseWriter, l LogPayload) {
+	client, err := rpc.Dial("tcp", "logger-service:5001")
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	var resp string
+
+	payload := RPCPayload{
+		Name: l.Name,
+		Data: l.Data,
+	}
+
+	err = client.Call("RPCServer.LogInfo", payload, &resp)
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
+
+	payloadResp := jsonResponse{
+		Error:   false,
+		Message: resp,
+	}
+
+	err = app.writeJSON(w, http.StatusAccepted, payloadResp)
+	if err != nil {
+		app.errorJSON(w, err)
+		return
+	}
 }
